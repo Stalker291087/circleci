@@ -1,0 +1,202 @@
+version: 2.1
+#orbs definition
+orbs:
+  # https://circleci.com/developer/orbs/orb/circleci/aws-ecr
+  aws-cli: circleci/aws-cli@4.0
+  # https://circleci.com/developer/orbs/orb/circleci/aws-cli
+  aws-ecr: circleci/aws-ecr@9.0.0
+  # https://circleci.com/developer/orbs/orb/circleci/aws-ecs
+  aws-ecs: circleci/aws-ecs@4.0.0
+  # https://circleci.com/developer/orbs/orb/circleci/slack
+  slack: circleci/slack@4.12.5
+
+workflows:
+  build_image_and_push_to_ecr:
+    jobs:
+      - slack/on-hold:
+          name: slack-hold-stg
+          branch_pattern: staging
+          context: cemd-aws
+          mentions: '@here'
+      - slack/on-hold:
+          name: slack-hold-prod
+          branch_pattern: main
+          context: cemd-aws
+          mentions: '@here'
+      - pause_workflow:
+          requires:
+            - slack-hold-stg
+            - slack-hold-prod
+          type: approval
+          filters:
+            branches:
+              only:
+                - staging
+                - main
+      - aws-ecr/build_and_push_image:
+          name: build_and_push_stg
+          filters:
+            branches:
+              only:
+                - staging
+          checkout: true
+          requires:
+            - pause_workflow
+          account_id: ${AWS_ACCOUNT_ID}
+          region: ${AWS_REGION}
+          auth:
+            - aws-cli/setup:
+                profile_name: OICD-USER
+                role_arn: arn:aws:iam::<>
+                role_session_name: deployment-session
+          context: cemd-aws
+          profile_name: OICD-USER
+          repo: ${ECR_REPOSITORY_STG}
+          tag: "${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}"
+          dockerfile: Dockerfile
+          path: .
+          push_image: true
+          pre-steps:
+            - slack/notify:
+                event: always
+                branch_pattern: staging
+                custom: |
+                  {
+                    "blocks": [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "@here *Branch build* #${CIRCLE_BUILD_NUM} started for ${CIRCLE_BRANCH}."
+                            }
+                        },
+                        {
+                            "type": "divider"
+                        }
+                    ]
+                  }
+          post-steps:
+            - slack/notify:
+                branch_pattern: staging
+                event: pass
+                template: basic_success_1
+                mentions: '@here'
+            - slack/notify:
+                branch_pattern: staging
+                event: fail
+                template: basic_fail_1
+                mentions: '@here'
+      - aws-ecr/build_and_push_image:
+          name: build_and_push_prod
+          filters:
+            branches:
+              only:
+                - main
+          checkout: true
+          requires:
+            - pause_workflow
+          account_id: ${AWS_ACCOUNT_ID}
+          region: ${AWS_REGION}
+          auth:
+            - aws-cli/setup:
+                profile_name: OICD-USER
+                role_arn: arn:aws:iam::<>
+                role_session_name: deployment-session
+          context: cemd-aws
+          profile_name: OICD-USER
+          repo: ${ECR_REPOSITORY_PROD}
+          tag: "${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}"
+          dockerfile: Dockerfile
+          path: .
+          push_image: true
+          pre-steps:
+            - slack/notify:
+                event: always
+                branch_pattern: main
+                custom: |
+                  {
+                    "blocks": [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "@here *Branch build* #${CIRCLE_BUILD_NUM} started for ${CIRCLE_BRANCH}."
+                            }
+                        },
+                        {
+                            "type": "divider"
+                        }
+                    ]
+                  }
+          post-steps:
+            - slack/notify:
+                branch_pattern: main
+                event: pass
+                template: basic_success_1
+                mentions: '@here'
+            - slack/notify:
+                branch_pattern: main
+                event: fail
+                template: basic_fail_1
+                mentions: '@here'
+      - aws-ecs/deploy_service_update:
+          name: deploy-staging
+          context: cemd-aws
+          region: ${AWS_REGION}
+          auth:
+            - aws-cli/setup:
+                profile_name: OICD-USER
+                role_arn: arn:aws:iam::019773216718:role/circleci-ci-cd
+                role_session_name: deployment-session
+          profile_name: OICD-USER
+          family: ${ECS_TASK_FAMILY_STG}
+          service_name: ${ECS_SERVICE_STG}
+          cluster: ${ECS_CLUSTER_STG}
+          container_image_name_updates: 'container=cemd-api,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
+          verify_revision_is_deployed: true
+          requires:
+            - build_and_push_stg
+          filters:
+            branches:
+              only: staging
+          post-steps:
+            - slack/notify:
+                branch_pattern: staging
+                event: pass
+                template: basic_success_1
+                mentions: '@here'
+            - slack/notify:
+                branch_pattern: staging
+                event: fail
+                template: basic_fail_1
+                mentions: '@here'
+      - aws-ecs/deploy_service_update:
+          name: deploy-production
+          context: cemd-aws
+          auth:
+            - aws-cli/setup:
+                profile_name: OICD-USER
+                role_arn: arn:aws:iam::<>
+                role_session_name: deployment-session
+          profile_name: OICD-USER
+          family: ${ECS_TASK_FAMILY_PROD}
+          service_name: ${ECS_SERVICE_PROD}
+          cluster: ${ECS_CLUSTER_PROD}
+          container_image_name_updates: 'container=cemd-api,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
+          verify_revision_is_deployed: true
+          requires:
+            - build_and_push_prod
+          filters:
+            branches:
+              only: main
+          post-steps:
+            - slack/notify:
+                branch_pattern: main
+                event: pass
+                template: basic_success_1
+                mentions: '@here'
+            - slack/notify:
+                branch_pattern: main
+                event: fail
+                template: basic_fail_1
+                mentions: '@here'
