@@ -16,12 +16,12 @@ workflows:
       - slack/on-hold:
           name: slack-hold-stg
           branch_pattern: staging
-          context: cemd-aws
+          context: <context-name>
           mentions: '@here'
       - slack/on-hold:
           name: slack-hold-prod
           branch_pattern: main
-          context: cemd-aws
+          context: <context-name>
           mentions: '@here'
       - pause_workflow:
           requires:
@@ -49,7 +49,7 @@ workflows:
                 profile_name: OICD-USER
                 role_arn: arn:aws:iam::<>
                 role_session_name: deployment-session
-          context: cemd-aws
+          context: <context-name>
           profile_name: OICD-USER
           repo: ${ECR_REPOSITORY_STG}
           tag: "${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}"
@@ -102,7 +102,7 @@ workflows:
                 profile_name: OICD-USER
                 role_arn: arn:aws:iam::<>
                 role_session_name: deployment-session
-          context: cemd-aws
+          context: <context-name>
           profile_name: OICD-USER
           repo: ${ECR_REPOSITORY_PROD}
           tag: "${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}"
@@ -141,7 +141,7 @@ workflows:
                 mentions: '@here'
       - aws-ecs/deploy_service_update:
           name: deploy-staging
-          context: cemd-aws
+          context: <context-name>
           region: ${AWS_REGION}
           auth:
             - aws-cli/setup:
@@ -152,7 +152,7 @@ workflows:
           family: ${ECS_TASK_FAMILY_STG}
           service_name: ${ECS_SERVICE_STG}
           cluster: ${ECS_CLUSTER_STG}
-          container_image_name_updates: 'container=cemd-api,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
+          container_image_name_updates: 'container=<container_name>,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
           verify_revision_is_deployed: true
           requires:
             - build_and_push_stg
@@ -172,7 +172,7 @@ workflows:
                 mentions: '@here'
       - aws-ecs/deploy_service_update:
           name: deploy-production
-          context: cemd-aws
+          context: <context-name>
           auth:
             - aws-cli/setup:
                 profile_name: OICD-USER
@@ -182,7 +182,7 @@ workflows:
           family: ${ECS_TASK_FAMILY_PROD}
           service_name: ${ECS_SERVICE_PROD}
           cluster: ${ECS_CLUSTER_PROD}
-          container_image_name_updates: 'container=cemd-api,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
+          container_image_name_updates: 'container=<container_name>,tag=${APP_PREFIX}.${CIRCLE_BRANCH}.${APP_VERSION}.${CIRCLE_SHA1}'
           verify_revision_is_deployed: true
           requires:
             - build_and_push_prod
