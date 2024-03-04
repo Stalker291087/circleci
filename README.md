@@ -23,10 +23,7 @@ Different configurations to implement CI/CD to your projects using CircleCI.
 
 ## Help
 
-Any advise for common problems or issues.
-```
-command to run if program contains helper info
-```
+If you require any help with them yaml config files please feel free to send an email to jeancarloe01@hotmail.com
 
 ## Authors
 
